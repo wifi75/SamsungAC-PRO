@@ -1,10 +1,17 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
+<p align="center">
+  <img src="custom_components/climate_ip/brand/icon@2x.png" alt="SamsungAC-PRO logo" width="192">
+</p>
+
 # SamsungAC-PRO - Samsung climate integration for Home Assistant
 
 Maintained by **Tiziano Cassone** ([@wifi75](https://github.com/wifi75)).
 
 Project repository: [github.com/wifi75/SamsungAC-PRO](https://github.com/wifi75/SamsungAC-PRO)
+
+SamsungAC-PRO is an independent, unofficial community project. It is not
+affiliated with or endorsed by Samsung Electronics, Home Assistant, or HACS.
 
 Implementation of ClimateDevice for controlling IP based AC units.
 This component is able to work with any AC unit which can be controlled with REST API.
