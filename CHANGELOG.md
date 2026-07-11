@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.2.1-pro.4] - 2026-07-11
+
+### Fixed
+- **Legacy timeout diagnostics**: 2878 command timeouts now include the affected command summary, making it easier to identify whether a climate, fan, preset, switch, or polling command caused the timeout.
+- **Socket cleanup noise**: Connection-close timeouts after a command timeout are now logged at debug level instead of warning level.
+- **Legacy availability handling**: Older 2878 modules now require one additional failed reconnect before Home Assistant marks the unit as persistently offline.
+
 ## [9.2.1-pro.3] - 2026-07-11
 
 ### Fixed
