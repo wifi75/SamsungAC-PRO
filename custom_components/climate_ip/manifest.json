@@ -15,7 +15,7 @@
     "xmltodict>=0.13.0",
     "icmplib>=3.0"
   ],
-  "version": "9.2.1-pro.1",
+  "version": "9.2.1-pro.2",
   "homeassistant": "2024.1.0",
   "quality_scale": "gold",
   "strict_typing": true

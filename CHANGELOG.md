@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## [9.2.1-pro.2] - 2026-07-11
 
 ### Added
 - **Legacy Display switch**: Added native control of the indoor-unit display light through `AC_ADD_LIGHT`.
