@@ -6,6 +6,7 @@
 - **Legacy Display switch**: Added native control of the indoor-unit display light through `AC_ADD_LIGHT`.
 - **Legacy Beep switch**: Added native beep mute/unmute control through the protocol-correct `AC_ADD_VOLUME` attribute.
 - **Filter reset button**: Added a momentary Home Assistant button that sends `AC_ADD_CLEAR_FILTER_ALARM=On` to reset the filter-cleaning timer.
+- **HACS brand assets**: Added the SamsungAC-PRO icon to the repository-level `brand` directory while retaining the local Home Assistant integration assets.
 
 ## [9.2.1-pro.1] - 2026-07-11
 
