@@ -10,7 +10,7 @@ import xmltodict
 from homeassistant.const import CONF_IP_ADDRESS, CONF_MAC, CONF_PORT, CONF_TOKEN
 
 from .connection import Connection, register_connection
-from .exceptions import AuthError, CannotConnect
+from .exceptions import AuthError, CannotConnect, DeviceCommandError
 from .properties import DeviceProperty, register_status_getter
 from homeassistant.helpers.issue_registry import async_create_issue, async_delete_issue, IssueSeverity
 from .const import (
@@ -745,6 +745,11 @@ class ConnectionSamsung2878(Connection):
             # 2. Any other response or update that contains actual state data.
 
             is_control_okay = is_response and not parsed_data and PROTOCOL_2878_DEVICE_CONTROL in xml_data and PROTOCOL_2878_STATUS_OK in xml_data
+            is_control_failed = (
+                is_response
+                and PROTOCOL_2878_DEVICE_CONTROL in xml_data
+                and 'Status="Fail"' in xml_data
+            )
             is_polling_response = is_response and PROTOCOL_2878_DEVICE_STATE in xml_data
 
             # Initialize should_resolve to False to prevent UnboundLocalError
@@ -756,6 +761,22 @@ class ConnectionSamsung2878(Connection):
                 # If it was a control command, any data update or a specific 'Okay' can resolve it.
                 command_debug = getattr(self._pending_future, '_command_debug', '')
                 is_poll_command = PROTOCOL_2878_DEVICE_STATE in command_debug
+
+                if not is_poll_command and is_control_failed:
+                    error_match = re.search(r'ErrorCode="([^"]+)"', xml_data)
+                    error_code = error_match.group(1) if error_match else "unknown"
+                    _LOGGER.warning(
+                        "%s Device rejected control command (ErrorCode=%s)",
+                        self.log_prefix,
+                        error_code,
+                    )
+                    self._pending_future.set_exception(
+                        DeviceCommandError(
+                            f"Device rejected control command (ErrorCode={error_code})"
+                        )
+                    )
+                    self._pending_future = None
+                    continue
                 
                 should_resolve = (is_poll_command and is_polling_response) or \
                                  (not is_poll_command and (is_control_okay or parsed_data))

@@ -28,6 +28,7 @@ device:
         'on': { value: '100' }
       status_template: '{{ device_state.get("AC_ADD_VOLUME", "100") }}'
       connection_template: '<Request Type="DeviceControl"><Control CommandID="AC_ADD_VOLUME" DUID="{{duid}}"><Attr ID="AC_ADD_VOLUME" Value="{{value}}" /></Control></Request>'
+      validation_template: '{% if "AC_ADD_VOLUME" in device_state %}valid{% endif %}'
     display:
       type: switch
       values:
@@ -35,13 +36,16 @@ device:
         'on': { value: 'On' }
       status_template: '{{ device_state.get("AC_ADD_LIGHT", "On") }}'
       connection_template: '<Request Type="DeviceControl"><Control CommandID="AC_ADD_LIGHT" DUID="{{duid}}"><Attr ID="AC_ADD_LIGHT" Value="{{value}}" /></Control></Request>'
+      validation_template: '{% if "AC_ADD_LIGHT" in device_state %}valid{% endif %}'
     reset_filter:
       type: switch
       values:
-        'idle': { value: 'Off' }
+        'idle': { value: '0' }
+        'idle_legacy': { value: '240' }
         'press': { value: 'On' }
-      status_template: '{{ device_state.get("AC_ADD_CLEAR_FILTER_ALARM", "Off") }}'
+      status_template: '{{ device_state.get("AC_ADD_CLEAR_FILTER_ALARM", "0") }}'
       connection_template: '<Request Type="DeviceControl"><Control CommandID="AC_ADD_CLEAR_FILTER_ALARM" DUID="{{duid}}"><Attr ID="AC_ADD_CLEAR_FILTER_ALARM" Value="{{value}}" /></Control></Request>'
+      validation_template: '{% if "AC_ADD_CLEAR_FILTER_ALARM" in device_state %}valid{% endif %}'
     auto_clean:
       type: switch
       values:

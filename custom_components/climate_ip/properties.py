@@ -19,7 +19,7 @@ from .const import (
     CONFIG_DEVICE_OPERATION_NUMBER_MAX,
     CONFIG_DEVICE_OPERATION_TEMP_UNIT_TEMPLATE,
 )
-from .exceptions import CannotConnect, AuthError
+from .exceptions import CannotConnect, AuthError, DeviceCommandError
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -581,6 +581,8 @@ class DeviceOperation(DeviceProperty):
                     params.get('headers'), device_state=current_full_state
                 )
                 return response is not None
+            except DeviceCommandError:
+                raise
             except (CannotConnect, AuthError) as e:
                 _LOGGER.warning("%s Failed to set value for %s: connection error: %s", self.log_prefix, self.id, e)
                 from homeassistant.exceptions import HomeAssistantError

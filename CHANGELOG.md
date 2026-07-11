@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.2.1-pro.3] - 2026-07-11
+
+### Fixed
+- **Capability-aware legacy controls**: Display and Beep are now exposed only when the device reports `AC_ADD_LIGHT` or `AC_ADD_VOLUME`, preventing unsupported controls on older firmware.
+- **Filter reset state**: Values `0` and `240` are now treated as valid idle states while the accepted reset command remains `On`.
+- **Rejected command handling**: Samsung `Status="Fail"` responses now return their error code immediately instead of causing a 20-second timeout and forced reconnection.
+
 ## [9.2.1-pro.2] - 2026-07-11
 
 ### Added
