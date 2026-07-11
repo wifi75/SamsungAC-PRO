@@ -1,9 +1,13 @@
 # Changelog
 
-## Unreleased
+## [9.2.1-pro.1] - 2026-07-11
 
 ### Fixed
 - **Legacy AC Turbo preset**: Recognize `AC_FUN_COMODE=TurboMode` in the legacy `special` preset mapping, preventing Home Assistant from immediately correcting an infrared-activated Turbo/Boost state back to `off`.
+
+### Added
+- **SamsungAC-PRO branding**: Added original Home Assistant and HACS icon assets, project ownership information, and links to the SamsungAC-PRO repository.
+- **Turbo/Boost documentation**: Documented the difference between the full Samsung Boost preset and the separate Turbo fan-speed command on legacy port 2878 devices.
 
 ## [9.2.1] - 2026-03-03
 
