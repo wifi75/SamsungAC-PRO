@@ -49,6 +49,7 @@ MAX_RECONNECT_DELAY = 300
 RECONNECT_FACTOR = 2
 COMMAND_TIMEOUT = 20.0
 MAX_RECONNECT_RETRIES = 5
+FRONTEND_UNAVAILABLE_RETRIES = 3
 
 class connection_config:
     def __init__(self, host, port, token, cert, duid):
@@ -78,6 +79,7 @@ class ConnectionSamsung2878(Connection):
         self._manager_task: Optional[asyncio.Task] = None # The main task that manages the persistent connection.
         self._update_callback: Optional[Callable[[Dict[str, Any]], Coroutine[Any, Any, None]]] = None
         self._pending_future: Optional[asyncio.Future] = None # The future for the command currently being processed.
+        self._pending_command_summary: Optional[str] = None
         self._reconnect_delay = INITIAL_RECONNECT_DELAY
         self._reconnect_retries = 0
         self._is_available = True # Used for stateful logging to report connection status changes.
@@ -121,6 +123,25 @@ class ConnectionSamsung2878(Connection):
         self._background_tasks.add(task)
         task.add_done_callback(self._background_tasks.discard)
         return task
+
+    @staticmethod
+    def _summarize_command(command: str) -> str:
+        """Return a short, privacy-safe summary for a 2878 XML command."""
+        if PROTOCOL_2878_DEVICE_STATE in command:
+            return "DeviceState poll"
+
+        command_id = re.search(r'CommandID="([^"]+)"', command)
+        attrs = re.findall(r'<Attr\s+ID="([^"]+)"\s+Value="([^"]*)"', command)
+        if attrs:
+            attr_summary = ", ".join(f"{attr_id}={value}" for attr_id, value in attrs)
+            if command_id:
+                return f"{command_id.group(1)} ({attr_summary})"
+            return attr_summary
+
+        if command_id:
+            return command_id.group(1)
+
+        return mask_sensitive_data(command.strip().replace("\n", " "))
 
     async def stop_listening(self) -> None:
         if self._manager_task:
@@ -305,7 +326,7 @@ class ConnectionSamsung2878(Connection):
                     try:
                         await asyncio.wait_for(self._writer.wait_closed(), timeout=2.0)
                     except asyncio.TimeoutError:
-                        _LOGGER.warning("%s Timeout waiting for connection close, forcing reset", self.log_prefix)
+                        _LOGGER.debug("%s Timeout waiting for connection close; socket will be discarded", self.log_prefix)
                     # --- END OF FIX ---
                 except (ConnectionResetError, ssl.SSLError, asyncio.CancelledError, OSError) as e:
                     _LOGGER.debug("%s Ignoring error during connection close: %s", self.log_prefix, e)
@@ -688,6 +709,7 @@ class ConnectionSamsung2878(Connection):
         """Process a command from the queue."""
         command, future = queue_task.result()
         self._pending_future = future
+        self._pending_command_summary = self._summarize_command(command)
         # Store the command string on the future for debugging purposes using setattr.
         setattr(self._pending_future, '_command_debug', command)
 
@@ -699,6 +721,7 @@ class ConnectionSamsung2878(Connection):
             if self._pending_future and not self._pending_future.done():
                 self._pending_future.set_exception(e)
             self._pending_future = None
+            self._pending_command_summary = None
 
     async def _process_read_queue(self, buffer: bytes, done: set[asyncio.Task]) -> Optional[bytes]:
         """Process data received from the read task."""
@@ -776,6 +799,7 @@ class ConnectionSamsung2878(Connection):
                         )
                     )
                     self._pending_future = None
+                    self._pending_command_summary = None
                     continue
                 
                 should_resolve = (is_poll_command and is_polling_response) or \
@@ -790,6 +814,7 @@ class ConnectionSamsung2878(Connection):
                     if not self._pending_future.done():
                         self._pending_future.set_result(True)
                     self._pending_future = None
+                    self._pending_command_summary = None
                 except asyncio.InvalidStateError:
                     pass  # Future was already resolved.
             if parsed_data and (is_response or is_update) and self._update_callback:
@@ -856,8 +881,9 @@ class ConnectionSamsung2878(Connection):
                     except Exception as e:
                         _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, e)
 
-                # If we've failed 2 times on the ping, force unavailability in HA
-                if self._reconnect_retries == 2:
+                # Only force frontend unavailability after repeated failures. These legacy
+                # modules can miss a reconnect attempt while the AC remains usable.
+                if self._reconnect_retries == FRONTEND_UNAVAILABLE_RETRIES:
                     _LOGGER.error("%s AC Network is persistently offline. Forcing frontend unavailability.", self.log_prefix)
                     if self._controller and getattr(self._controller, 'coordinator', None):
                         self._controller.coordinator.last_update_success = False
@@ -899,8 +925,9 @@ class ConnectionSamsung2878(Connection):
                     except Exception as e:
                         _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, e)
 
-                # If we've failed 2 times on the port, force unavailability in HA
-                if self._reconnect_retries == 2:
+                # Only force frontend unavailability after repeated failures. These legacy
+                # modules can miss a reconnect attempt while the AC remains usable.
+                if self._reconnect_retries == FRONTEND_UNAVAILABLE_RETRIES:
                     _LOGGER.error("%s AC Service is persistently offline. Forcing frontend unavailability.", self.log_prefix)
                     if self._controller and getattr(self._controller, 'coordinator', None):
                         self._controller.coordinator.last_update_success = False
@@ -1049,7 +1076,8 @@ class ConnectionSamsung2878(Connection):
              return None, None
 
         async with self._lock:
-            _LOGGER.debug("%s Queuing async command: %s", self.log_prefix, mask_sensitive_data(command.strip().replace('\n', '')))
+            command_summary = self._summarize_command(command)
+            _LOGGER.debug("%s Queuing async command: %s", self.log_prefix, command_summary)
             future = asyncio.get_event_loop().create_future()
             await self._cmd_queue.put((command, future))
 
@@ -1074,13 +1102,15 @@ class ConnectionSamsung2878(Connection):
                 import json
                 return json.dumps(self._device_status), {}
             except asyncio.TimeoutError as e:
-                _LOGGER.warning("%s Async command timed out", self.log_prefix)
+                pending_summary = self._pending_command_summary or command_summary
+                _LOGGER.warning("%s Async command timed out: %s", self.log_prefix, pending_summary)
                 if self._pending_future and self._pending_future == future:
                     self._pending_future = None
+                    self._pending_command_summary = None
                 
                 _LOGGER.debug("%s Command timed out. Forcing connection close to trigger reconnect.", self.log_prefix)
                 asyncio.create_task(self._close_connection())
-                raise CannotConnect("Command timed out") from e
+                raise CannotConnect(f"Command timed out: {pending_summary}") from e
             except Exception as e:
                 _LOGGER.error("%s Error executing async command: %s", self.log_prefix, e)
                 raise e
@@ -1126,7 +1156,8 @@ class ConnectionSamsung2878(Connection):
                 params.update({"value": value, "device_state": device_state, "duid": duid_to_use})
                 command = template.render(**params).strip() + "\n"
 
-            _LOGGER.debug("%s Queuing command: %s", self.log_prefix, mask_sensitive_data(command.strip().replace('\n', '')))
+            command_summary = self._summarize_command(command)
+            _LOGGER.debug("%s Queuing command: %s", self.log_prefix, command_summary)
             future = asyncio.get_event_loop().create_future()
             await self._cmd_queue.put((command, future))
 
@@ -1134,13 +1165,15 @@ class ConnectionSamsung2878(Connection):
                 await asyncio.wait_for(future, timeout=COMMAND_TIMEOUT)
                 _LOGGER.debug("%s Command executed successfully", self.log_prefix)
             except asyncio.TimeoutError as e:
-                _LOGGER.warning("%s Command timed out: %s", self.log_prefix, mask_sensitive_data(command.strip().replace('\n', '')))
+                pending_summary = self._pending_command_summary or command_summary
+                _LOGGER.warning("%s Command timed out: %s", self.log_prefix, pending_summary)
                 
                 # CRITICAL: If the command times out, we MUST clear the pending_future
                 # so the manager can accept new commands and not get stuck.
                 if self._pending_future and self._pending_future == future:
                     _LOGGER.debug("%s Command timed out. Clearing pending future to unblock manager.", self.log_prefix)
                     self._pending_future = None
+                    self._pending_command_summary = None
 
                 # CRITICAL FIX: Always force connection close on timeout.
                 # If a command timed out (20s), the connection is effectively dead or hung.
@@ -1148,7 +1181,7 @@ class ConnectionSamsung2878(Connection):
                 _LOGGER.debug("%s Command timed out. Forcing connection close to trigger reconnect.", self.log_prefix)
                 asyncio.create_task(self._close_connection())
                 
-                raise CannotConnect("Command timed out") from e
+                raise CannotConnect(f"Command timed out: {pending_summary}") from e
             except Exception as e:
                 _LOGGER.error("%s Command failed with exception: %s", self.log_prefix, e)
                 raise
