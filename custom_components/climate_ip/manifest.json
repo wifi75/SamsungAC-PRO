@@ -1,14 +1,15 @@
 {
   "domain": "climate_ip",
-  "name": "Climate IP",
+  "name": "SamsungAC-PRO",
   "codeowners": [
+    "@wifi75",
     "@SebuZet"
   ],
   "config_flow": true,
   "dependencies": [],
-  "documentation": "https://github.com/ismaelrivas/samsungrac",
+  "documentation": "https://github.com/wifi75/SamsungAC-PRO",
   "iot_class": "local_polling",
-  "issue_tracker": "https://github.com/ismaelrivas/samsungrac/issues",
+  "issue_tracker": "https://github.com/wifi75/SamsungAC-PRO/issues",
   "requirements": [
     "requests>=2.21.0",
     "xmltodict>=0.13.0",

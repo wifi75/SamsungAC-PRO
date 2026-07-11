@@ -1,6 +1,11 @@
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-orange.svg)](https://github.com/custom-components/hacs)
 
-# Climate_IP - IP based climate device for Home Assistant
+# SamsungAC-PRO - Samsung climate integration for Home Assistant
+
+Maintained by **Tiziano Cassone** ([@wifi75](https://github.com/wifi75)).
+
+Project repository: [github.com/wifi75/SamsungAC-PRO](https://github.com/wifi75/SamsungAC-PRO)
+
 Implementation of ClimateDevice for controlling IP based AC units.
 This component is able to work with any AC unit which can be controlled with REST API.
 At this moment it is configured to work with:
@@ -11,8 +16,9 @@ At this moment it is configured to work with:
 
 Support for any unit working with REST API can be easily added via YAML configuration file.
 
-This component was created by SebuZet, he however appears to be MIA so I have forked and repaired his component
-https://github.com/SebuZet/samsungrac
+SamsungAC-PRO is maintained by Tiziano Cassone and is based on the work in
+[ismaelrivas/samsungrac](https://github.com/ismaelrivas/samsungrac). The original
+component was created by [SebuZet](https://github.com/SebuZet/samsungrac).
 
 ## Installation
 1. Download all files from repo to newly created folder

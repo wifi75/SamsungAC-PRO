@@ -1,7 +1,13 @@
-[![](https://img.shields.io/github/release/atxbyea/samsungrac/all.svg?style=for-the-badge)](https://github.com/atxbyea/samsungrac/releases)
+[![](https://img.shields.io/github/v/release/wifi75/SamsungAC-PRO?style=for-the-badge)](https://github.com/wifi75/SamsungAC-PRO/releases)
 [![hacs_badge](https://img.shields.io/badge/HACS-Default-orange.svg?style=for-the-badge)](https://github.com/custom-components/hacs)
-[![](https://img.shields.io/badge/MAINTAINER-%40atxbyea?style=for-the-badge)](https://github.com/atxbyea)
+[![](https://img.shields.io/badge/MAINTAINER-Tiziano%20Cassone-blue?style=for-the-badge)](https://github.com/wifi75)
 [![](https://img.shields.io/badge/COMMUNITY-FORUM-success?style=for-the-badge)](https://community.home-assistant.io)
+
+# SamsungAC-PRO
+
+Maintained by **Tiziano Cassone** ([@wifi75](https://github.com/wifi75)).
+
+Project repository: [github.com/wifi75/SamsungAC-PRO](https://github.com/wifi75/SamsungAC-PRO)
 
 
 # Installation (There are two methods, with HACS or manual)
