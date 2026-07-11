@@ -16,6 +16,21 @@ At this moment it is configured to work with:
 
 Support for any unit working with REST API can be easily added via YAML configuration file.
 
+## Legacy Samsung AC: Turbo / Boost support
+
+SamsungAC-PRO correctly supports the full Turbo mode used by older Samsung AC
+units on port 2878. In Home Assistant, select the **Boost** preset to reproduce
+the Turbo button on the infrared remote. This sends
+`AC_FUN_COMODE=TurboMode`, which enables the complete high-power behavior,
+including maximum airflow and the unit's Turbo vane position.
+
+The **Turbo** option under fan speed is a separate Samsung command
+(`AC_FUN_WINDLEVEL=Turbo`) and controls only the fan level. It is not the same
+as the full **Boost** preset.
+
+Turbo state changes made with the infrared remote are also detected by Home
+Assistant: `TurboMode` is shown as **Boost**, and `Off` disables the preset.
+
 SamsungAC-PRO is maintained by Tiziano Cassone and is based on the work in
 [ismaelrivas/samsungrac](https://github.com/ismaelrivas/samsungrac). The original
 component was created by [SebuZet](https://github.com/SebuZet/samsungrac).
