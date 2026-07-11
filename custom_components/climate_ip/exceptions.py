@@ -16,6 +16,9 @@ class InvalidHeaderError(CannotConnect):
 class AuthError(HomeAssistantError):
     """Error to indicate there is an authentication problem."""
 
+class DeviceCommandError(HomeAssistantError):
+    """Error returned by a device that rejected a control command."""
+
 class CertNotFound(HomeAssistantError):
     """Error to indicate the certificate file is missing."""
 
