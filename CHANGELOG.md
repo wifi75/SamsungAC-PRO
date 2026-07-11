@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Legacy AC Turbo preset**: Recognize `AC_FUN_COMODE=TurboMode` in the legacy `special` preset mapping, preventing Home Assistant from immediately correcting an infrared-activated Turbo/Boost state back to `off`.
+
 ## [9.2.1] - 2026-03-03
 
 ### Changed
