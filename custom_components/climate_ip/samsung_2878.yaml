@@ -82,6 +82,7 @@ device:
         'sleep': { value : 'Sleep' }
         'smart': { value : 'Smart' }
         'comfort': { value : 'SoftCool' }
+        'boost': { value : 'TurboMode' }
         'wind1': { value : 'WindMode1' }
         'wind2': { value : 'WindMode2' }
         'wind3': { value : 'WindMode3' }
