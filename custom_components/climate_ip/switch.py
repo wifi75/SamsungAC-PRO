@@ -13,6 +13,8 @@ from .properties import PROPERTY_TYPE_SWITCH
 
 _LOGGER = logging.getLogger(__name__)
 
+BUTTON_OPERATION_IDS = {"reset_filter"}
+
 async def async_setup_entry(
     hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback
 ) -> None:
@@ -56,6 +58,10 @@ async def async_setup_entry(
                  continue
 
             if op.id == "power":
+                continue
+
+            # Momentary commands are exposed by the button platform instead.
+            if op.id in BUTTON_OPERATION_IDS:
                 continue
                 
             if op.match_type(PROPERTY_TYPE_SWITCH):
