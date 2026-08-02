@@ -4,6 +4,7 @@ from typing import Any, Optional
 from homeassistant.components.switch import SwitchEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
@@ -108,21 +109,40 @@ class SamsungClimateSwitch(CoordinatorEntity, SwitchEntity):
 
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Turn the entity on."""
-        _LOGGER.debug("Turning on %s", self.name)
-        if await self._controller.async_set_property(self._operation.id, "on"):
-            self._is_on = True
-            self.async_write_ha_state()
-            # Trigger refresh to align state
-            await self.coordinator.async_request_refresh()
+        await self._async_set_on_off(True)
 
     async def async_turn_off(self, **kwargs: Any) -> None:
         """Turn the entity off."""
-        _LOGGER.debug("Turning off %s", self.name)
-        if await self._controller.async_set_property(self._operation.id, "off"):
-            self._is_on = False
+        await self._async_set_on_off(False)
+
+    async def _async_set_on_off(self, turn_on: bool) -> None:
+        """Optimistically flip the toggle, then confirm with the device.
+
+        The device round-trip can take a few seconds; updating the UI first
+        (like the climate entity already does) makes the switch feel
+        immediate. If the command fails, the toggle is reverted to its
+        previous state instead of being left showing the wrong value.
+        """
+        _LOGGER.debug("Turning %s %s", "on" if turn_on else "off", self.name)
+        previous_state = self._is_on
+        self._is_on = turn_on
+        self.async_write_ha_state()
+
+        try:
+            success = await self._controller.async_set_property(
+                self._operation.id, "on" if turn_on else "off"
+            )
+        except HomeAssistantError as e:
+            _LOGGER.warning("Failed to turn %s %s: %s", "on" if turn_on else "off", self.name, e)
+            success = False
+
+        if not success:
+            self._is_on = previous_state
             self.async_write_ha_state()
-            # Trigger refresh to align state
-            await self.coordinator.async_request_refresh()
+            return
+
+        # Trigger refresh to align state
+        await self.coordinator.async_request_refresh()
 
     def _update_state(self):
         """Update internal state from operation value."""

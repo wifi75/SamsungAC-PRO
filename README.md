@@ -2,7 +2,7 @@
 
 # ❄️ SamsungAC-PRO
 
-![Version](https://img.shields.io/badge/VERSION-v9.3.0--pro-orange)
+![Version](https://img.shields.io/badge/VERSION-v9.3.1--pro-orange)
 ![Python](https://img.shields.io/badge/PYTHON-3.x-blue)
 ![Home Assistant](https://img.shields.io/badge/HOME%20ASSISTANT-%E2%89%A5%202024.1.0-0891b2)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-brightgreen.svg)](https://github.com/custom-components/hacs)

@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.3.1-pro] - 2026-08-02
+
+### Changed
+- **Faster-feeling switches**: legacy 2878 switches (Purify, Auto Clean, Beep, Display) now update the toggle in Home Assistant immediately, before the command round-trip to the device completes, matching the optimistic-update behavior the climate entity already had. If the device rejects the command or is unreachable, the toggle is reverted to its previous state instead of being left showing the wrong value.
+
 ## [9.3.0-pro] - 2026-08-02
 
 Stable release consolidating the `9.2.1-pro.1` through `9.2.1-pro.7` line.
