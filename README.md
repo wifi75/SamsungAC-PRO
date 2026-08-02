@@ -15,9 +15,9 @@
 
 ## 📖 Descrizione
 
-**Samsung climate integration for Home Assistant.**
+**A reliability-focused Home Assistant integration for Samsung air conditioners, from current SmartThings-era units down to decade-old legacy models still speaking the original port-2878 protocol.**
 
-Maintained by **Tiziano Cassone** ([@wifi75](https://github.com/wifi75)).
+Built and maintained by **Tiziano Cassone** ([@wifi75](https://github.com/wifi75)) as the actively developed "PRO" evolution of the original samsungrac project — with an emphasis on connection stability, capability-aware controls (only show what your specific unit actually supports), and clear diagnostics when something goes wrong.
 
 Project repository: [github.com/wifi75/SamsungAC-PRO](https://github.com/wifi75/SamsungAC-PRO)
 
