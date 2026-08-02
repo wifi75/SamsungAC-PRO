@@ -50,6 +50,12 @@ RECONNECT_FACTOR = 2
 COMMAND_TIMEOUT = 20.0
 MAX_RECONNECT_RETRIES = 5
 FRONTEND_UNAVAILABLE_RETRIES = 3
+# A stale session (InvalidateAccount) means the device is alive but still
+# holding a previous session open; it needs time to expire server-side, not
+# an aggressive exponential backoff. Wait a fixed, longer delay and tolerate
+# more consecutive collisions before flagging the frontend unavailable.
+SESSION_COLLISION_RETRY_DELAY = 30.0
+SESSION_COLLISION_FRONTEND_UNAVAILABLE_RETRIES = 6
 
 class connection_config:
     def __init__(self, host, port, token, cert, duid):
@@ -82,6 +88,8 @@ class ConnectionSamsung2878(Connection):
         self._pending_command_summary: Optional[str] = None
         self._reconnect_delay = INITIAL_RECONNECT_DELAY
         self._reconnect_retries = 0
+        self._session_collision_retries = 0
+        self._pending_session_collision = False
         self._is_available = True # Used for stateful logging to report connection status changes.
         self._is_ready = asyncio.Event()  # Event to signal when connection is ready
         self._last_successful_config: Optional[Dict[str, Any]] = None
@@ -115,6 +123,7 @@ class ConnectionSamsung2878(Connection):
         if self._manager_task is None or self._manager_task.done():
             _LOGGER.info("%s Starting connection manager", self.log_prefix)
             self._reconnect_retries = 0
+            self._session_collision_retries = 0
             self._manager_task = asyncio.create_task(self._connection_manager())
 
     def _track_task(self, coro) -> asyncio.Task:
@@ -250,6 +259,7 @@ class ConnectionSamsung2878(Connection):
         diag = {
             "is_connected": self._is_ready.is_set(),
             "reconnect_retries": self._reconnect_retries,
+            "session_collision_retries": self._session_collision_retries,
             "is_available": self._is_available,
         }
 
@@ -334,6 +344,7 @@ class ConnectionSamsung2878(Connection):
 
     async def _establish_connection_and_handshake(self):
         await self._close_connection()
+        self._pending_session_collision = False
         cfg = self._cfg
         initial_msg = None
 
@@ -538,7 +549,15 @@ class ConnectionSamsung2878(Connection):
         if not initial_msg or (PROTOCOL_2878_DPLUG not in initial_msg and PROTOCOL_2878_DRC not in initial_msg and PROTOCOL_2878_INVALIDATE not in initial_msg):
             _LOGGER.warning("%s Handshake failed: Did not receive expected initial message (DPLUG-1.6 or DRC-1.00 or InvalidateAccount). Got: %s", self.log_prefix, initial_msg)
             raise CannotConnect("Handshake failed: Did not receive expected initial message")
-        
+
+        if initial_msg and PROTOCOL_2878_INVALIDATE in initial_msg:
+            # The device can signal the stale-session collision as early as this
+            # greeting message, before we even send the auth command. Mark it now
+            # so any failure between here and the auth response (e.g. the device
+            # closing the socket right after this greeting) is still treated as
+            # a session collision rather than a genuine connection failure.
+            self._pending_session_collision = True
+
         if not self._connection_init_template:
             _LOGGER.error("%s Handshake failed: Connection initialization template is missing.", self.log_prefix)
             raise CannotConnect("Handshake failed: Connection initialization template is missing.")
@@ -553,6 +572,7 @@ class ConnectionSamsung2878(Connection):
                 # Handle InvalidateAccount (Session Collision) gracefully
                 if PROTOCOL_2878_INVALIDATE in auth_response:
                     _LOGGER.info("%s Device reported session collision (InvalidateAccount). Waiting for old session to timeout...", self.log_prefix)
+                    self._pending_session_collision = True
                     return False # Trigger retry logic
 
                 if 'ErrorCode="301"' in auth_response:
@@ -568,6 +588,7 @@ class ConnectionSamsung2878(Connection):
         _LOGGER.info("%s Connection ready", self.log_prefix)
         self._reconnect_delay = INITIAL_RECONNECT_DELAY
         self._reconnect_retries = 0
+        self._session_collision_retries = 0
         self._is_ready.set()  # Signal that we are ready for commands
         _LOGGER.debug("%s Connection is ready, _is_ready event set.", self.log_prefix)
         
@@ -825,11 +846,55 @@ class ConnectionSamsung2878(Connection):
                 # We don't need to do anything here except acknowledge
                 # that the command was successful so the UI doesn't hang. The future is already resolved.
                 _LOGGER.debug("%s 'DeviceControl Okay' ack received. Waiting for subsequent push update.", self.log_prefix)
-        
+
         return buffer
 
+    async def _create_offline_repair_issue(self) -> None:
+        """Create (or refresh) the persistent-offline repair issue for this host."""
+        if not (self._controller and getattr(self._controller, 'hass', None)):
+            return
+        try:
+            async_create_issue(
+                self._controller.hass,
+                "climate_ip",
+                f"connection_failed_{self._cfg.host}",
+                is_fixable=False,
+                severity=IssueSeverity.WARNING,
+                translation_key="connection_failed",
+                translation_placeholders={
+                    "host": self._cfg.host,
+                    "name": getattr(self._cfg, 'name', None) or self._cfg.host
+                }
+            )
+        except Exception as e:
+            _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, e)
 
+    async def _handle_session_collision_backoff(self) -> None:
+        """Back off after a stale-session (InvalidateAccount) collision.
 
+        The device is alive but still holding a previous session open; it just
+        needs time to expire server-side, so we retry on a fixed longer delay
+        and tolerate more consecutive collisions before forcing the frontend
+        unavailable, instead of sharing the fast exponential backoff used for
+        genuine connection failures.
+        """
+        self._session_collision_retries += 1
+
+        if self._session_collision_retries == SESSION_COLLISION_FRONTEND_UNAVAILABLE_RETRIES:
+            await self._create_offline_repair_issue()
+            _LOGGER.error("%s Stale session did not clear after repeated attempts. Forcing frontend unavailability.", self.log_prefix)
+            if self._controller and getattr(self._controller, 'coordinator', None):
+                self._controller.coordinator.last_update_success = False
+                self._controller.coordinator.async_update_listeners()
+        else:
+            _LOGGER.debug(
+                "%s Waiting %.0fs for stale session to clear (attempt %d/%d)...",
+                self.log_prefix, SESSION_COLLISION_RETRY_DELAY,
+                self._session_collision_retries, SESSION_COLLISION_FRONTEND_UNAVAILABLE_RETRIES
+            )
+
+        await self._close_connection()
+        await asyncio.sleep(SESSION_COLLISION_RETRY_DELAY)
 
     async def handle_reconnection(self) -> bool:
         """Handle the reconnection process."""
@@ -864,22 +929,8 @@ class ConnectionSamsung2878(Connection):
                 self._reconnect_retries += 1
                 
                 # Create a repair issue if the device is persistently offline
-                if self._reconnect_retries == 3 and self._controller and getattr(self._controller, 'hass', None):
-                    try:
-                        async_create_issue(
-                            self._controller.hass,
-                            "climate_ip",
-                            f"connection_failed_{self._cfg.host}",
-                            is_fixable=False,
-                            severity=IssueSeverity.WARNING,
-                            translation_key="connection_failed",
-                            translation_placeholders={
-                                "host": self._cfg.host,
-                                "name": getattr(self._cfg, 'name', None) or self._cfg.host
-                            }
-                        )
-                    except Exception as e:
-                        _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, e)
+                if self._reconnect_retries == 3:
+                    await self._create_offline_repair_issue()
 
                 # Only force frontend unavailability after repeated failures. These legacy
                 # modules can miss a reconnect attempt while the AC remains usable.
@@ -891,39 +942,35 @@ class ConnectionSamsung2878(Connection):
 
                 self._ssl_context_cache.clear()
                 await self._close_connection()
-                
+
                 # Use current exponential backoff but without jitter for network down
                 delay_to_use = self._reconnect_delay
                 _LOGGER.debug("%s Host unreachable. Retrying ping in %.1f seconds...", self.log_prefix, delay_to_use)
                 await asyncio.sleep(delay_to_use)
-                
+
                 # Increment exponential backoff delay for the next attempt
                 self._reconnect_delay = min(self._reconnect_delay * RECONNECT_FACTOR, MAX_RECONNECT_DELAY)
                 return False
 
             # If the handshake fails with a connection error, it returns False.
             if not handshake_success:
+                if self._pending_session_collision:
+                    # 2a. Device is alive but still holding a previous session open
+                    # (InvalidateAccount). This is not an outage: retry on a fixed,
+                    # longer delay instead of ramping up exponential backoff, and
+                    # tolerate more consecutive collisions before forcing the
+                    # frontend unavailable, since the stale session just needs
+                    # time to expire server-side.
+                    await self._handle_session_collision_backoff()
+                    return False
+
                 # 2. Network UP but Port 2878 closed/crashing.
                 _LOGGER.debug("%s Handshake returned False (or skipped). Proceeding to backoff logic.", self.log_prefix)
                 self._reconnect_retries += 1
-                
+
                 # Create a repair issue if the device is persistently offline
-                if self._reconnect_retries == 3 and self._controller and getattr(self._controller, 'hass', None):
-                    try:
-                        async_create_issue(
-                            self._controller.hass,
-                            "climate_ip",
-                            f"connection_failed_{self._cfg.host}",
-                            is_fixable=False,
-                            severity=IssueSeverity.WARNING,
-                            translation_key="connection_failed",
-                            translation_placeholders={
-                                "host": self._cfg.host,
-                                "name": getattr(self._cfg, 'name', None) or self._cfg.host
-                            }
-                        )
-                    except Exception as e:
-                        _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, e)
+                if self._reconnect_retries == 3:
+                    await self._create_offline_repair_issue()
 
                 # Only force frontend unavailability after repeated failures. These legacy
                 # modules can miss a reconnect attempt while the AC remains usable.
@@ -941,34 +988,28 @@ class ConnectionSamsung2878(Connection):
                 await asyncio.sleep(delay_with_jitter)
                 self._reconnect_delay = min(self._reconnect_delay * RECONNECT_FACTOR, MAX_RECONNECT_DELAY)
                 return False
-                
+
         except (CannotConnect, AuthError) as e:
-            # 3. Network UP but an exception occurred during connection logic
-            self._reconnect_retries += 1
-
-            # Create a repair issue if the device is persistently offline
-            if self._reconnect_retries == 3 and self._controller and getattr(self._controller, 'hass', None):
-                try:
-                    async_create_issue(
-                        self._controller.hass,
-                        "climate_ip",
-                        f"connection_failed_{self._cfg.host}",
-                        is_fixable=False,
-                        severity=IssueSeverity.WARNING,
-                        translation_key="connection_failed",
-                        translation_placeholders={
-                            "host": self._cfg.host,
-                            "name": getattr(self._cfg, 'name', None) or self._cfg.host
-                        }
-                    )
-                except Exception as ex:
-                    _LOGGER.debug("%s Failed to create repair issue: %s", self.log_prefix, ex)
-
             # If reconnection fails, fail any pending command
             if self._pending_future and not self._pending_future.done():
                 self._pending_future.set_exception(CannotConnect(f"Connection lost and reconnect failed: {e}"))
                 self._pending_future = None
-                
+
+            if self._pending_session_collision:
+                # 3a. The device signalled the stale-session collision as early as
+                # the initial greeting, and the connection then broke (e.g. socket
+                # closed) before we could see it again in the auth response. Treat
+                # it the same lenient way as the direct auth_response case above.
+                await self._handle_session_collision_backoff()
+                return False
+
+            # 3. Network UP but an exception occurred during connection logic
+            self._reconnect_retries += 1
+
+            # Create a repair issue if the device is persistently offline
+            if self._reconnect_retries == 3:
+                await self._create_offline_repair_issue()
+
             jitter = random.uniform(0, self._reconnect_delay * 0.2)
             delay_with_jitter = self._reconnect_delay + jitter
             _LOGGER.warning("%s Port connection error. Backing off for %.1f seconds (jitter: %.1f)...", self.log_prefix, delay_with_jitter, jitter)
@@ -977,7 +1018,7 @@ class ConnectionSamsung2878(Connection):
             await asyncio.sleep(delay_with_jitter)
             self._reconnect_delay = min(self._reconnect_delay * RECONNECT_FACTOR, MAX_RECONNECT_DELAY)
             return False
-        
+
         return True
 
     async def _connection_manager(self):
@@ -1052,9 +1093,12 @@ class ConnectionSamsung2878(Connection):
     async def async_execute(self, method, url, data, headers, device_state=None, _is_probe=False, _is_poll=False) -> Tuple[Optional[str], Optional[Dict[str, str]]]:
         """Executes an asynchronous command (raw XML for 2878)."""
         # Fast-fail if the connection is known to be offline and in retry backoff.
-        if not self._is_ready.is_set() and self._reconnect_retries > 0:
+        # Session-collision retries count too: they can hold the connection down
+        # for minutes, and a command should fail fast rather than block for
+        # COMMAND_TIMEOUT waiting on a connection that isn't coming back soon.
+        if not self._is_ready.is_set() and (self._reconnect_retries > 0 or self._session_collision_retries > 0):
             _LOGGER.debug("%s Connection is in retry backoff. Fast-failing command execution.", self.log_prefix)
-            if self._reconnect_retries >= 2:
+            if self._reconnect_retries >= 2 or self._session_collision_retries >= 2:
                 raise CannotConnect("Connection is persistently offline")
             else:
                 raise CannotConnect("Connection is temporarily offline")

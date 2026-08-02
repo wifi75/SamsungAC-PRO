@@ -1,5 +1,12 @@
 # Changelog
 
+## [9.2.1-pro.5] - 2026-08-02
+
+### Fixed
+- **False "persistently offline" on session collision**: When the device replies `InvalidateAccount` (a stale session left over from a previous connection still needs to expire), the legacy 2878 handler now waits a fixed 30s per attempt and tolerates up to 6 consecutive collisions before forcing Home Assistant to mark the entity unavailable, instead of sharing the same fast 3-retry exponential backoff used for genuine connection failures. Previously, a brief network blip could trip the offline flag within ~20-30 seconds while the AC was still fully functional and about to reconnect on its own.
+- **Early session-collision detection**: The stale-session collision is now also recognized when the device signals `InvalidateAccount` in its very first greeting message (before the auth command is even sent), so a connection drop right after that greeting still gets the lenient 30s backoff instead of the aggressive one.
+- **Command fast-fail during session collision**: Home Assistant service calls (turn on/off, set temperature, etc.) issued while a session collision is being waited out now fail immediately instead of blocking for up to 20 seconds.
+
 ## [9.2.1-pro.4] - 2026-07-11
 
 ### Fixed
