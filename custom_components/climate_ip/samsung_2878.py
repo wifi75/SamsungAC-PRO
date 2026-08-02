@@ -550,13 +550,20 @@ class ConnectionSamsung2878(Connection):
             _LOGGER.warning("%s Handshake failed: Did not receive expected initial message (DPLUG-1.6 or DRC-1.00 or InvalidateAccount). Got: %s", self.log_prefix, initial_msg)
             raise CannotConnect("Handshake failed: Did not receive expected initial message")
 
-        if initial_msg and PROTOCOL_2878_INVALIDATE in initial_msg:
-            # The device can signal the stale-session collision as early as this
-            # greeting message, before we even send the auth command. Mark it now
-            # so any failure between here and the auth response (e.g. the device
-            # closing the socket right after this greeting) is still treated as
-            # a session collision rather than a genuine connection failure.
-            self._pending_session_collision = True
+        if PROTOCOL_2878_INVALIDATE not in initial_msg:
+            # The device's greeting is normally followed by a separate
+            # `<Update Type="InvalidateAccount"/>` push meaning "no valid account
+            # on this connection yet - authenticate". That is an expected part of
+            # every handshake, not an error. When it arrives as its own TCP
+            # segment (common over a flaky Wi-Fi link) rather than bundled with
+            # the greeting, it must be drained here; otherwise it is left sitting
+            # in the socket buffer and gets misread as the response to our
+            # upcoming AuthToken command, which used to be misdiagnosed as a
+            # stale-session collision even though authentication was about to
+            # succeed normally.
+            pre_auth_msg = await self._read_full_response(timeout=5.0)
+            if pre_auth_msg and PROTOCOL_2878_INVALIDATE not in pre_auth_msg:
+                _LOGGER.debug("%s Unexpected message before auth (ignoring): %s", self.log_prefix, pre_auth_msg)
 
         if not self._connection_init_template:
             _LOGGER.error("%s Handshake failed: Connection initialization template is missing.", self.log_prefix)
@@ -994,14 +1001,6 @@ class ConnectionSamsung2878(Connection):
             if self._pending_future and not self._pending_future.done():
                 self._pending_future.set_exception(CannotConnect(f"Connection lost and reconnect failed: {e}"))
                 self._pending_future = None
-
-            if self._pending_session_collision:
-                # 3a. The device signalled the stale-session collision as early as
-                # the initial greeting, and the connection then broke (e.g. socket
-                # closed) before we could see it again in the auth response. Treat
-                # it the same lenient way as the direct auth_response case above.
-                await self._handle_session_collision_backoff()
-                return False
 
             # 3. Network UP but an exception occurred during connection logic
             self._reconnect_retries += 1

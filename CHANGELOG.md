@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.2.1-pro.6] - 2026-08-02
+
+### Fixed
+- **Root cause of the false "InvalidateAccount" auth failure**: the device always follows its greeting with a separate `<Update Type="InvalidateAccount"/>` push meaning "authenticate on this connection" - a normal handshake step, not an error. When that push arrived as its own TCP segment instead of bundled with the greeting (common over a flaky Wi-Fi link), the legacy 2878 handler left it unread in the socket buffer and misread it as the response to its own AuthToken command, misdiagnosing a completely healthy reconnect as a stale-session collision. The handshake now explicitly drains this push before sending AuthToken, so this no longer happens; the lenient session-collision backoff from pro.5 remains as a safety net for genuine collisions.
+
 ## [9.2.1-pro.5] - 2026-08-02
 
 ### Fixed
