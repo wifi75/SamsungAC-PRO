@@ -2,7 +2,7 @@
 
 # ❄️ SamsungAC-PRO
 
-![Version](https://img.shields.io/badge/VERSION-v9.2.1--pro.7-orange)
+![Version](https://img.shields.io/badge/VERSION-v9.3.0--pro-orange)
 ![Python](https://img.shields.io/badge/PYTHON-3.x-blue)
 ![Home Assistant](https://img.shields.io/badge/HOME%20ASSISTANT-%E2%89%A5%202024.1.0-0891b2)
 [![hacs_badge](https://img.shields.io/badge/HACS-Custom-brightgreen.svg)](https://github.com/custom-components/hacs)
@@ -36,11 +36,11 @@ Support for any unit working with REST API can be easily added via YAML configur
 
 ## 🆕 What's new
 
-See [CHANGELOG.md](CHANGELOG.md) for the full history. Highlights from the latest releases (legacy port-2878 units):
+See [CHANGELOG.md](CHANGELOG.md) for the full history. **v9.3.0-pro** is a stable release consolidating the `9.2.1-pro.1`–`pro.7` line, for legacy port-2878 units:
 
-* **v9.2.1-pro.7** — Diagnostics now decode the device's `AC_ADD2_OPTIONCODE` capability bitmask (heating availability, horizontal swing, Quiet, Turbo/SoftCool, Fahrenheit, SPi/purify, humidity sensor, inverter, power-usage logging) into a readable `capabilities` block, so you can see what your specific unit actually supports.
-* **v9.2.1-pro.6** — Fixed the root cause of spurious "authentication failed" reconnects: the device's post-greeting `InvalidateAccount` handshake message could be misread as a failed login instead of the normal "please authenticate" step, especially over a flaky Wi-Fi link. Reconnects are now correctly sequenced.
-* **v9.2.1-pro.5** — Fixed Home Assistant marking a fully working AC as unavailable within ~20-30 seconds after a brief network blip. Stale-session recovery now waits appropriately instead of sharing the aggressive backoff used for real connection failures, and commands now fail fast instead of hanging for up to 20 seconds during that recovery window.
+* Fixed Home Assistant marking a fully working AC as unavailable within ~20-30 seconds after a brief network blip, and the root cause behind it: a normal part of the device's handshake (`InvalidateAccount`) was sometimes misread as a failed login over a flaky Wi-Fi link.
+* Diagnostics now decode the device's `AC_ADD2_OPTIONCODE` capability bitmask (heating availability, horizontal swing, Quiet, Turbo/SoftCool, Fahrenheit, SPi/purify, humidity sensor, inverter, power-usage logging) into a readable `capabilities` block.
+* Legacy Display switch, Beep switch and Filter reset button; capability-aware exposure so they only show up when the device actually supports them.
 
 ## Legacy Samsung AC: Turbo / Boost support
 

@@ -1,5 +1,23 @@
 # Changelog
 
+## [9.3.0-pro] - 2026-08-02
+
+Stable release consolidating the `9.2.1-pro.1` through `9.2.1-pro.7` line.
+
+### Fixed
+- **False "persistently offline" on session collision**: a brief network blip no longer forces a fully working AC unavailable within ~20-30 seconds; stale-session recovery now waits appropriately, and commands fail fast instead of hanging for up to 20 seconds during that recovery window.
+- **Root cause of spurious authentication failures**: the device's post-greeting `InvalidateAccount` handshake message - a normal "please authenticate" step - is no longer misread as a failed login when it arrives as a separate TCP segment over a flaky Wi-Fi link.
+- **Capability-aware legacy controls**: Display and Beep switches are now exposed only when the device actually reports `AC_ADD_LIGHT` / `AC_ADD_VOLUME`.
+- **Filter reset state**: `0` and `240` are now treated as valid idle states while the accepted reset command remains `On`.
+- **Rejected command handling**: Samsung `Status="Fail"` responses now return their error code immediately instead of causing a 20-second timeout and forced reconnection.
+- **Legacy AC Turbo preset**: `AC_FUN_COMODE=TurboMode` is recognized in the legacy `special` preset mapping, preventing Home Assistant from immediately correcting an infrared-activated Turbo/Boost state back to `off`.
+- **Legacy timeout diagnostics**: 2878 command timeouts now include the affected command summary; connection-close timeouts after a command timeout are logged at debug instead of warning level.
+
+### Added
+- **Capability diagnostics (`AC_ADD2_OPTIONCODE`)**: decodes the device's capability bitmask (heating availability, horizontal swing, Quiet, Turbo/SoftCool, Fahrenheit, SPi/purify, humidity sensor, inverter, power-usage logging) into a `capabilities` block in the Home Assistant diagnostics download.
+- **Legacy Display switch**, **Legacy Beep switch** and a **Filter reset button** for port-2878 units.
+- **SamsungAC-PRO branding**: original Home Assistant/HACS icon assets and repository-level `brand` directory.
+
 ## [9.2.1-pro.7] - 2026-08-02
 
 ### Added
