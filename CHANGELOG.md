@@ -1,5 +1,10 @@
 # Changelog
 
+## [9.2.1-pro.7] - 2026-08-02
+
+### Added
+- **Capability diagnostics (`AC_ADD2_OPTIONCODE`)**: decode the device's single-integer capability bitmask (heating availability, horizontal swing, Quiet, Turbo/SoftCool, Fahrenheit, SPi/purify, humidity sensor, inverter, power-usage logging, etc.) into a readable `capabilities` block in the Home Assistant diagnostics download. The bitmask table is ported from the official Samsung app and cross-checked against the independently reverse-engineered [porech/pysamsung-dplug](https://github.com/porech/pysamsung-dplug) project. This is diagnostics-only for now (does not change which controls are shown) and lays the groundwork for gating entities on real hardware capability instead of attribute presence.
+
 ## [9.2.1-pro.6] - 2026-08-02
 
 ### Fixed

@@ -9,6 +9,18 @@ from homeassistant.core import HomeAssistant
 
 from .helpers import mask_sensitive_data
 from .const import DOMAIN
+from .optioncode import OptionCode
+
+
+def _capabilities_from_poll_data(last_poll_data: Any) -> dict[str, Any] | None:
+    """Decode AC_ADD2_OPTIONCODE from a raw poll response, if present and valid."""
+    if not isinstance(last_poll_data, dict):
+        return None
+    option_code = OptionCode.from_state(last_poll_data)
+    if option_code is None:
+        return None
+    return {"option_code": option_code.code, **option_code.as_dict()}
+
 
 async def async_get_config_entry_diagnostics(
     hass: HomeAssistant, entry: ConfigEntry
@@ -46,6 +58,9 @@ async def async_get_config_entry_diagnostics(
         diagnostics_data["controller_state"] = entry_data.controller.state_attributes
         diagnostics_data["last_poll_response"] = entry_data.controller.last_poll_data
         diagnostics_data["connection_diagnostics"] = entry_data.controller.connection_diagnostics
+        capabilities = _capabilities_from_poll_data(entry_data.controller.last_poll_data)
+        if capabilities:
+            diagnostics_data["capabilities"] = capabilities
     elif isinstance(entry_data, dict):
         # Handle multi-device entry
         diagnostics_data["coordinators"] = {}
@@ -56,6 +71,9 @@ async def async_get_config_entry_diagnostics(
                     "last_poll_response": coordinator.controller.last_poll_data,
                     "connection_diagnostics": coordinator.controller.connection_diagnostics,
                 }
+                capabilities = _capabilities_from_poll_data(coordinator.controller.last_poll_data)
+                if capabilities:
+                    coordinator_diag["capabilities"] = capabilities
                 if coordinator.data:
                     coordinator_diag["coordinator_data"] = asdict(coordinator.data)
                 diagnostics_data["coordinators"][device_id] = coordinator_diag
